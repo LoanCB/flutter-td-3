@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:confetti/confetti.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,6 +37,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   Category? _selectedCategory = Category.entrees;
+  late ConfettiController _confettiController;
 
   // Liste de toutes nos données à afficher (plats) : Liste de notre composant Plat
   final Map<Category, List<PlatData>> platsParCategory = {
@@ -122,53 +126,79 @@ class _MyHomePageState extends State<MyHomePage> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 1));
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final plats = _selectedCategory == null
         ? platsParCategory.values.expand((list) => list).toList()
         : platsParCategory[_selectedCategory]!;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Column(
-        children: [
-          // Row scrollable de nos catégories
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: Category.values.map((category) {
-                final label = category.name[0].toUpperCase() + category.name.substring(1);
-                final isSelected = category == _selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  // utilisation de ChoiceChip pour simplifier la gestion de la catégorie à afficher
-                  child: ChoiceChip(
-                    label: Text(label),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      setState(() {
-                        _selectedCategory = (_selectedCategory == category) ? null : category;
-                      });
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: Text(widget.title),
           ),
-          // GridView de nos plats à afficher
-          const SizedBox(height: 10),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              padding: const EdgeInsets.all(8),
-              children: plats.map((plat) => PlatCard(plat: plat)).toList(),
-            ),
+          body: Column(
+            children: [
+              // Row scrollable de nos catégories
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: Category.values.map((category) {
+                    final label = category.name[0].toUpperCase() + category.name.substring(1);
+                    final isSelected = category == _selectedCategory;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      // utilisation de ChoiceChip pour simplifier la gestion de la catégorie à afficher
+                      child: ChoiceChip(
+                        label: Text(label),
+                        selected: isSelected,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedCategory = (_selectedCategory == category) ? null : category;
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              // GridView de nos plats à afficher
+              const SizedBox(height: 10),
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  padding: const EdgeInsets.all(8),
+                  children: plats.map((plat) => PlatCard(plat: plat, confettiController: _confettiController)).toList(),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        Align(
+          alignment: Alignment.topCenter,
+          child: ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirection: pi / 2, // Direction vers le bas
+            emissionFrequency: 0.05,
+            numberOfParticles: 20,
+            gravity: 0.1,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -188,36 +218,61 @@ class PlatData {
   });
 }
 
-// Création d'un widget pour éviter de dupliquer le code
-class PlatCard extends StatelessWidget {
-  const PlatCard({super.key, required this.plat});
+class PlatCard extends StatefulWidget {
   final PlatData plat;
+  final ConfettiController confettiController;
+
+  const PlatCard({Key? key, required this.plat, required this.confettiController}) : super(key: key);
+
+  @override
+  _PlatCardState createState() => _PlatCardState();
+}
+
+class _PlatCardState extends State<PlatCard> {
+  bool _isPlaying = false;
+
+  void _onTap() {
+    if (!_isPlaying) {
+      setState(() {
+        _isPlaying = true;
+      });
+      widget.confettiController.play();
+      Future.delayed(const Duration(seconds: 1), () {
+        setState(() {
+          _isPlaying = false;
+        });
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              plat.title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 5),
-            Image.network(
-              plat.imageUrl,
-              height: 80,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
-            const SizedBox(height: 5),
-            Text('${plat.price.toStringAsFixed(2)} €', style: const TextStyle(color: Colors.teal)),
-            const SizedBox(height: 5),
-            Text(plat.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
+    return GestureDetector(
+      onTap: _onTap,
+      child: Card(
+        elevation: 3,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.plat.title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 5),
+              Image.network(
+                widget.plat.imageUrl,
+                height: 80,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+              const SizedBox(height: 5),
+              Text('${widget.plat.price.toStringAsFixed(2)} €', style: const TextStyle(color: Colors.teal)),
+              const SizedBox(height: 5),
+              Text(widget.plat.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+          ),
         ),
       ),
     );
